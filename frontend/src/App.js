@@ -45,7 +45,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 // Use the environment variable if deployed, otherwise fallback to localhost for development
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API_URL = process.env.REACT_APP_API_URL || "";
 
 // Vibrant, colorful theme
 const theme = createTheme({
@@ -274,7 +274,7 @@ function SortableFileCard({
             </Tooltip>
           </Box>
           <Button 
-            onClick={() => downloadFile(file.id, file.name)} 
+            onClick={() => downloadFile(file)} 
             variant="contained" 
             size="small"
             color="success"
@@ -291,18 +291,15 @@ function SortableFileCard({
 
 function App() {
   const [files, setFiles] = useState([]);
-  
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pagesToDelete, setPagesToDelete] = useState([]);
-  
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
-  
   const [reorderDialogOpen, setReorderDialogOpen] = useState(false);
   const [pageOrder, setPageOrder] = useState([]); 
-  
   const [selectedFile, setSelectedFile] = useState(null);
   const [mergeFilename, setMergeFilename] = useState("Perfect_Merged_Document.pdf");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // DnD Sensors
   const sensors = useSensors(
@@ -335,20 +332,20 @@ function App() {
   const onDrop = async (acceptedFiles) => {
     const uploads = await Promise.all(
       acceptedFiles.map(async (file) => {
-        if (file.size > 20 * 1024 * 1024) {
-          alert(`${file.name} exceeds 20 MB limit`);
+        if (file.size > 4.5 * 1024 * 1024) {
+          alert(`${file.name} exceeds 4.5MB limit`);
           return null;
         }
         try {
           const form = new FormData();
           form.append("file", file);
-          const resp = await axios.post(`${API_URL}/upload`, form, {
+          const pcResp = await axios.post(`${API_URL}/api/page_count`, form, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-          const pcResp = await axios.get(`${API_URL}/page_count/${resp.data.file_id}`);
-          return { id: resp.data.file_id, name: file.name, pageCount: pcResp.data.page_count };
+          const newId = Math.random().toString(36).substring(7);
+          return { id: newId, name: file.name, pageCount: pcResp.data.page_count, fileObj: file };
         } catch (error) {
-          alert(`Failed to upload ${file.name}:\n${error.response?.data?.detail || error.message}`);
+          alert(`Failed to analyze ${file.name}:\n${error.response?.data?.detail || error.message}`);
           return null;
         }
       })
@@ -363,8 +360,7 @@ function App() {
     accept: { 'application/pdf': ['.pdf'] }
   });
 
-  const deleteFile = async (id) => {
-    await axios.delete(`${API_URL}/remove/${id}`);
+  const deleteFile = (id) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
@@ -373,29 +369,49 @@ function App() {
   };
 
   const mergeFiles = async () => {
-    const ids = files.map((f) => f.id);
-    const resp = await axios.post(`${API_URL}/merge`, { file_ids: ids });
-    const pcResp = await axios.get(`${API_URL}/page_count/${resp.data.file_id}`);
-    
-    let finalName = mergeFilename.trim() || "Perfect_Merged_Document.pdf";
-    if (!finalName.toLowerCase().endsWith('.pdf')) finalName += '.pdf';
-
-    const merged = { id: resp.data.file_id, name: finalName, pageCount: pcResp.data.page_count };
-    setFiles([merged]);
+    setIsProcessing(true);
+    try {
+      const form = new FormData();
+      files.forEach((f) => form.append("files", f.fileObj));
+      
+      const resp = await axios.post(`${API_URL}/api/merge`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        responseType: 'blob'
+      });
+      
+      let finalName = mergeFilename.trim() || "Perfect_Merged_Document.pdf";
+      if (!finalName.toLowerCase().endsWith('.pdf')) finalName += '.pdf';
+      
+      const newFileObj = new File([resp.data], finalName, { type: 'application/pdf' });
+      
+      const countForm = new FormData();
+      countForm.append("file", newFileObj);
+      const pcResp = await axios.post(`${API_URL}/api/page_count`, countForm);
+      
+      setFiles([{ id: 'merged-' + Math.random(), name: finalName, pageCount: pcResp.data.page_count, fileObj: newFileObj }]);
+    } catch (error) {
+      alert("Error merging files. Make sure total size is under 4.5MB.");
+    }
+    setIsProcessing(false);
   };
 
-  const downloadFile = (id, name) => {
+  const downloadFile = (fileItem) => {
+    const url = URL.createObjectURL(fileItem.fileObj);
     const link = document.createElement("a");
-    link.href = `${API_URL}/download/${id}?name=${encodeURIComponent(name)}`;
-    link.download = name; 
+    link.href = url;
+    link.download = fileItem.name;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+    URL.revokeObjectURL(url);
+    deleteFile(fileItem.id);
   };
 
   const openPreviewDialog = (file) => {
-    setSelectedFile(file);
+    setSelectedFile({
+      ...file,
+      previewUrl: URL.createObjectURL(file.fileObj)
+    });
     setPreviewDialogOpen(true);
   };
 
@@ -419,29 +435,43 @@ function App() {
 
   const submitDeletePages = async () => {
     if (!selectedFile) return;
-    const resp = await axios.post(`${API_URL}/delete_pages`, {
-      file_id: selectedFile.id,
-      pages: pagesToDelete,
-    });
-    const editedId = resp.data.file_id;
-    const pcResp = await axios.get(`${API_URL}/page_count/${editedId}`);
-    setFiles((prev) =>
-      prev.map((f) => (f.id === selectedFile.id ? { id: editedId, name: selectedFile.name, pageCount: pcResp.data.page_count } : f))
-    );
+    try {
+      const form = new FormData();
+      form.append("file", selectedFile.fileObj);
+      form.append("pages_to_delete", JSON.stringify(pagesToDelete));
+      
+      const resp = await axios.post(`${API_URL}/api/slice`, form, { responseType: 'blob' });
+      const newFileObj = new File([resp.data], selectedFile.name, { type: 'application/pdf' });
+      
+      const countForm = new FormData();
+      countForm.append("file", newFileObj);
+      const pcResp = await axios.post(`${API_URL}/api/page_count`, countForm);
+      
+      setFiles((prev) =>
+        prev.map((f) => (f.id === selectedFile.id ? { ...f, fileObj: newFileObj, pageCount: pcResp.data.page_count } : f))
+      );
+    } catch(err) {
+      alert("Error slicing document.");
+    }
     setDeleteDialogOpen(false);
   };
 
   const submitReorderPages = async () => {
     if (!selectedFile) return;
-    const resp = await axios.post(`${API_URL}/reorder_pages`, {
-      file_id: selectedFile.id,
-      page_order: pageOrder.map(Number),
-    });
-    const editedId = resp.data.file_id;
-    const pcResp = await axios.get(`${API_URL}/page_count/${editedId}`);
-    setFiles((prev) =>
-      prev.map((f) => (f.id === selectedFile.id ? { id: editedId, name: selectedFile.name, pageCount: pcResp.data.page_count } : f))
-    );
+    try {
+      const form = new FormData();
+      form.append("file", selectedFile.fileObj);
+      form.append("page_order", JSON.stringify(pageOrder.map(Number)));
+      
+      const resp = await axios.post(`${API_URL}/api/reorder`, form, { responseType: 'blob' });
+      const newFileObj = new File([resp.data], selectedFile.name, { type: 'application/pdf' });
+      
+      setFiles((prev) =>
+        prev.map((f) => (f.id === selectedFile.id ? { ...f, fileObj: newFileObj } : f))
+      );
+    } catch(err) {
+      alert("Error reordering pages.");
+    }
     setReorderDialogOpen(false);
   };
 
@@ -544,7 +574,7 @@ function App() {
               or click to browse from your device
             </Typography>
             <Chip 
-              label="Max 5 files (20MB each)" 
+              label="Max 5 files (Limit: 4.5MB each)" 
               size="small" 
               sx={{ mt: 3, bgcolor: 'rgba(241, 245, 249, 0.8)', color: '#64748b', fontWeight: 600 }} 
             />
@@ -564,7 +594,7 @@ function App() {
                     </Box>
                     <Typography variant="h6" gutterBottom>1. Upload</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Drag and drop up to 5 PDF files at once (max 20MB each) into the glowing area above. 
+                      Drag and drop up to 5 PDF files at once (max 4.5MB each) into the glowing area above. 
                     </Typography>
                   </Paper>
                 </Grid>
@@ -617,6 +647,7 @@ function App() {
                   variant="contained"
                   startIcon={<MergeIcon />}
                   onClick={mergeFiles}
+                  disabled={isProcessing}
                   sx={{ 
                     background: 'linear-gradient(to right, #8b5cf6, #ec4899)',
                     color: 'white',
@@ -626,7 +657,7 @@ function App() {
                     '&:hover': { background: 'linear-gradient(to right, #7c3aed, #db2777)' }
                   }}
                 >
-                  Merge Magic
+                  {isProcessing ? 'Processing...' : 'Merge Magic'}
                 </Button>
               </Box>
             </Box>
@@ -677,7 +708,7 @@ function App() {
           <List sx={{ py: 0 }}>
             <ListItem sx={{ py: 2 }}>
               <ListItemIcon><CloudUploadIcon sx={{ color: '#8b5cf6' }} /></ListItemIcon>
-              <ListItemText primary="Uploading" secondary="Drag & drop up to 5 files into the glowing box. Files must be under 20MB." />
+              <ListItemText primary="Uploading" secondary="Drag & drop up to 5 files into the glowing box. Files must be under 4.5MB." />
             </ListItem>
             <Divider />
             <ListItem sx={{ py: 2 }}>
@@ -715,20 +746,20 @@ function App() {
       {/* --- PREVIEW DIALOG --- */}
       <Dialog 
         open={previewDialogOpen} 
-        onClose={() => setPreviewDialogOpen(false)} 
+        onClose={() => { setPreviewDialogOpen(false); if(selectedFile?.previewUrl) URL.revokeObjectURL(selectedFile.previewUrl); }} 
         maxWidth="lg" 
         fullWidth
         PaperProps={{ sx: { height: '85vh', borderRadius: 4, overflow: 'hidden' } }}
       >
         <DialogTitle sx={{ borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f8fafc' }}>
           <Typography variant="h6" color="primary">Preview: {selectedFile?.name}</Typography>
-          <Button onClick={() => setPreviewDialogOpen(false)} variant="outlined" color="primary" size="small">Close</Button>
+          <Button onClick={() => { setPreviewDialogOpen(false); if(selectedFile?.previewUrl) URL.revokeObjectURL(selectedFile.previewUrl); }} variant="outlined" color="primary" size="small">Close</Button>
         </DialogTitle>
         <DialogContent sx={{ p: 0, overflow: 'hidden' }}>
           {selectedFile && (
             <iframe
               title="PDF Preview"
-              src={`${API_URL}/preview/${selectedFile.id}`}
+              src={selectedFile.previewUrl}
               width="100%"
               height="100%"
               style={{ border: 'none' }}
