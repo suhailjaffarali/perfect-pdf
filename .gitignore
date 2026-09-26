@@ -1,0 +1,17 @@
+# Node.js
+node_modules/
+build/
+.npm/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# App Specific
+backend/uploads/
+.DS_Store
