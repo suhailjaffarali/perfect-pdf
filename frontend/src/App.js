@@ -290,29 +290,46 @@ function SortableFileCard({
   );
 }
 
-const pulse = keyframes`
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.1); opacity: 0.8; }
-  100% { transform: scale(1); opacity: 1; }
+const bgShift = keyframes`
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 `;
 
-const fadeOut = keyframes`
-  0% { opacity: 1; visibility: visible; }
-  100% { opacity: 0; visibility: hidden; }
+const iconEntrance = keyframes`
+  0% { transform: translateY(-100vh) rotate(-540deg) scale(0); opacity: 0; }
+  60% { transform: translateY(30px) rotate(20deg) scale(1.2); opacity: 1; }
+  80% { transform: translateY(-10px) rotate(-10deg) scale(0.95); opacity: 1; }
+  100% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
+`;
+
+const textReveal = keyframes`
+  0% { transform: translateY(40px) scale(0.8); opacity: 0; letter-spacing: 25px; filter: blur(10px); }
+  100% { transform: translateY(0) scale(1); opacity: 1; letter-spacing: 2px; filter: blur(0px); }
+`;
+
+const splashExit = keyframes`
+  0% { transform: scale(1); opacity: 1; filter: blur(0px); }
+  100% { transform: scale(1.3); opacity: 0; filter: blur(15px); visibility: hidden; }
+`;
+
+const glow = keyframes`
+  0%, 100% { filter: drop-shadow(0 0 15px rgba(255,255,255,0.3)); }
+  50% { filter: drop-shadow(0 0 35px rgba(255,255,255,0.8)); }
 `;
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [isFading, setIsFading] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
-    // Start fading out after 2 seconds
-    const fadeTimer = setTimeout(() => setIsFading(true), 2000);
-    // Remove from DOM completely after 2.5 seconds (gives 0.5s for fadeout)
-    const removeTimer = setTimeout(() => setShowSplash(false), 2500);
+    // Hold animation for 3.2s, then trigger cinematic exit
+    const exitTimer = setTimeout(() => setIsExiting(true), 3200);
+    // Remove from DOM after exit animation finishes (3.2s + 0.6s)
+    const removeTimer = setTimeout(() => setShowSplash(false), 3800);
     
     return () => {
-      clearTimeout(fadeTimer);
+      clearTimeout(exitTimer);
       clearTimeout(removeTimer);
     };
   }, []);
@@ -520,14 +537,44 @@ function App() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #8b5cf6, #ec4899, #f59e0b)', // matches their vibrant UI
-            animation: isFading ? `${fadeOut} 0.5s ease-out forwards` : 'none',
+            background: 'linear-gradient(-45deg, #8b5cf6, #ec4899, #f59e0b, #3b82f6)',
+            backgroundSize: '400% 400%',
+            animation: isExiting 
+              ? `${splashExit} 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards` 
+              : `${bgShift} 6s ease infinite`,
+            overflow: 'hidden'
           }}
         >
-          <PdfIcon sx={{ fontSize: 120, color: 'white', animation: `${pulse} 1.5s infinite ease-in-out` }} />
-          <Typography variant="h3" sx={{ color: 'white', fontWeight: 900, mt: 3, letterSpacing: 2 }}>
-            PerfectPDF
-          </Typography>
+          <Box sx={{ 
+            animation: isExiting ? 'none' : `${glow} 2s ease-in-out infinite`,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            <PdfIcon 
+              sx={{ 
+                fontSize: 140, 
+                color: 'white', 
+                animation: `${iconEntrance} 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards`,
+                filter: 'drop-shadow(0px 10px 20px rgba(0,0,0,0.3))'
+              }} 
+            />
+            <Typography 
+              variant="h2" 
+              sx={{ 
+                color: 'white', 
+                fontWeight: 900, 
+                mt: 4, 
+                letterSpacing: 2,
+                animation: `${textReveal} 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
+                animationDelay: '0.3s', // text starts slightly after icon
+                opacity: 0, // ensures it stays hidden before animation starts
+                textShadow: '0px 10px 20px rgba(0,0,0,0.2)'
+              }}
+            >
+              PerfectPDF
+            </Typography>
+          </Box>
         </Box>
       )}
 
