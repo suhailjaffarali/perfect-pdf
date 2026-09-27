@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <path d="M160 144c0-17.67 14.33-32 32-32h128l96 96v208c0 17.67-14.33 32-32 32H192c-17.67 0-32-14.33-32-32V144z" fill="#ffffff"/>
+  <path d="M320 112v96h96l-96-96z" fill="#f3f4f6"/>
+  <text x="256" y="320" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="112" font-weight="900" fill="url(#bgGrad)" text-anchor="middle" letter-spacing="-4">PDF</text>
+</svg>
