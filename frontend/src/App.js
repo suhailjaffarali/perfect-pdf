@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { keyframes } from "@mui/system";
 import {
   Container, Box, Typography, Button, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -289,7 +290,33 @@ function SortableFileCard({
   );
 }
 
+const pulse = keyframes`
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+`;
+
+const fadeOut = keyframes`
+  0% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+`;
+
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const [isFading, setIsFading] = useState(false);
+
+  useEffect(() => {
+    // Start fading out after 2 seconds
+    const fadeTimer = setTimeout(() => setIsFading(true), 2000);
+    // Remove from DOM completely after 2.5 seconds (gives 0.5s for fadeout)
+    const removeTimer = setTimeout(() => setShowSplash(false), 2500);
+    
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
+  }, []);
+
   const [files, setFiles] = useState([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pagesToDelete, setPagesToDelete] = useState([]);
@@ -479,6 +506,31 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       
+      {/* Splash Screen */}
+      {showSplash && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999, // Ensure it sits on top of absolutely everything
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, #8b5cf6, #ec4899, #f59e0b)', // matches their vibrant UI
+            animation: isFading ? `${fadeOut} 0.5s ease-out forwards` : 'none',
+          }}
+        >
+          <PdfIcon sx={{ fontSize: 120, color: 'white', animation: `${pulse} 1.5s infinite ease-in-out` }} />
+          <Typography variant="h3" sx={{ color: 'white', fontWeight: 900, mt: 3, letterSpacing: 2 }}>
+            PerfectPDF
+          </Typography>
+        </Box>
+      )}
+
       {/* Background Wrapper */}
       <Box sx={{
         minHeight: '100vh',
