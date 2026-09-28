@@ -29,3 +29,31 @@ pip install -r requirements.txt
 
 # Run the FastAPI server
 uvicorn api.index:app --reload --port 8000
+```
+
+### 2. Start the Frontend
+Open a second terminal and navigate to the frontend folder:
+```bash
+cd frontend
+
+# Install Node dependencies
+npm install
+
+# Start the React development server
+npm start
+```
+*The frontend will launch on `http://localhost:3000` and automatically route API requests to your Python backend.*
+
+## ☁️ Deployment (Vercel)
+
+This project is pre-configured for seamless deployment on Vercel as a Monorepo. 
+The included `vercel.json` file uses explicit `builds` to map the React static output and the FastAPI endpoints together, bypassing standard zero-config quirks. 
+
+To deploy:
+1. Push your code to GitHub.
+2. Import the repository into your Vercel Dashboard.
+3. Deploy! (No extra build settings required).
+
+## 📝 License
+
+This project is open-source and available under the MIT License.
